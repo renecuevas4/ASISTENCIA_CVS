@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CVS Asistencia - Sistema de Control</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #3B82F6 0%, #EC4899 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 400px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        h1 { text-align: center; color: #4B5563; margin: 0 0 0.5rem 0; }
+        .subtitle { text-align: center; color: #6B7280; font-size: 0.875rem; margin: 0 0 2rem 0; }
+        
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            background: #F3F4F6;
+            padding: 0.25rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .tab {
+            flex: 1;
+            padding: 0.5rem;
+            border: none;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            background: transparent;
+            color: #6B7280;
+        }
+        .tab.active { background: white; color: #3B82F6; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        
+        label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #4B5563;
+            margin-bottom: 0.5rem;
+        }
+        input, select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #D1D5DB;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 0.875rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            color: white;
+        }
+        .btn-login { background: linear-gradient(135deg, #3B82F6 0%, #EC4899 100%); }
+        .btn-marca { background: linear-gradient(135deg, #10B981 0%, #059669 100%); margin-bottom: 0.5rem; }
+        .btn-logout { background: #EF4444; }
+        
+        .info { padding: 0.75rem; background: #DBEAFE; border-radius: 0.5rem; margin-top: 1rem; text-align: center; font-size: 0.75rem; color: #1E40AF; }
+        .hidden { display: none; }
+        
+        .employee-info {
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .employee-info p { margin: 0 0 0.25rem 0; font-size: 0.875rem; color: #4B5563; }
+    </style>
+</head>
+<body>
+    <!-- LOGIN -->
+    <div id="loginView" class="container">
+        <h1>CVS Asistencia</h1>
+        <p class="subtitle">Electric Mobility Services</p>
+        
+        <div class="tabs">
+            <button class="tab active" id="tabEmpleado" onclick="selectTab('empleado')">👷 Empleado</button>
+            <button class="tab" id="tabAdmin" onclick="selectTab('admin')">👔 Admin</button>
+            <button class="tab" id="tabFiscal" onclick="selectTab('fiscalizador')">🛡️ DT</button>
+        </div>
+        
+        <form id="loginForm" onsubmit="login(event)">
+            <label id="labelId">RUT</label>
+            <input type="text" id="inputId" placeholder="12.345.678-9" required>
+            
+            <label>Contraseña</label>
+            <input type="password" id="inputPass" placeholder="••••••••" required>
+            
+            <button type="submit" class="btn-login" id="btnLogin">Iniciar Sesión</button>
+        </form>
+        
+        <div class="info">
+            CVS ELECTRIC MOBILITY SERVICES SPA<br>
+            RUT: 78.324.019-K<br><br>
+            ℹ️ Contraseña por defecto: <strong>cvs2026</strong>
+        </div>
+    </div>
+    
+    <!-- EMPLEADO -->
+    <div id="employeeView" class="container hidden">
+        <h1>CVS Asistencia</h1>
+        <p class="subtitle">Control de Asistencia</p>
+        
+        <div class="employee-info" id="empInfo"></div>
+        
+        <label>📍 Seleccione Obra/Faena:</label>
+        <select id="selectObra" required>
+            <option value="">Seleccione...</option>
+        </select>
+        
+        <button class="btn-marca" onclick="marcar('ENTRADA')">✓ MARCAR ENTRADA</button>
+        <button class="btn-marca" onclick="marcar('INICIO COLACIÓN')">⏰ INICIO COLACIÓN</button>
+        <button class="btn-marca" onclick="marcar('FIN COLACIÓN')">⏰ FIN COLACIÓN</button>
+        <button class="btn-marca" onclick="marcar('SALIDA')">✓ MARCAR SALIDA</button>
+        
+        <button class="btn-logout" onclick="logout()">Cerrar Sesión</button>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://yhgiitkblzhpkjjrzmoz.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InloZ2lpdGtibHpocGtqanJ6bW96Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1OTk1MzIsImV4cCI6MjA4NTE3NTUzMn0.6did5rBQ0nLu2qMQ6S7wTwzMU8F-a6AtZj_EUnm3tO0';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        let tipoLogin = 'empleado';
+        let currentUser = null;
+        
+        // Cargar obras al iniciar
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const { data } = await supabase.from('obras_faenas').select('*').eq('activo', true);
+                const select = document.getElementById('selectObra');
+                if (data) {
+                    data.forEach(obra => {
+                        const opt = document.createElement('option');
+                        opt.value = obra.id;
+                        opt.textContent = obra.nombre;
+                        opt.dataset.nombre = obra.nombre;
+                        select.appendChild(opt);
+                    });
+                }
+            } catch (e) {
+                console.error('Error cargando obras:', e);
+            }
+        });
+        
+        function selectTab(tipo) {
+            tipoLogin = tipo;
+            document.getElementById('tabEmpleado').classList.remove('active');
+            document.getElementById('tabAdmin').classList.remove('active');
+            document.getElementById('tabFiscal').classList.remove('active');
+            
+            if (tipo === 'empleado') {
+                document.getElementById('tabEmpleado').classList.add('active');
+                document.getElementById('labelId').textContent = 'RUT';
+                document.getElementById('inputId').placeholder = '12.345.678-9';
+            } else if (tipo === 'admin') {
+                document.getElementById('tabAdmin').classList.add('active');
+                document.getElementById('labelId').textContent = 'Email';
+                document.getElementById('inputId').placeholder = 'admin@cvs.cl';
+            } else {
+                document.getElementById('tabFiscal').classList.add('active');
+                document.getElementById('labelId').textContent = 'Email';
+                document.getElementById('inputId').placeholder = 'fiscalizador@dt.gob.cl';
+            }
+        }
+        
+        async function login(e) {
+            e.preventDefault();
+            const id = document.getElementById('inputId').value;
+            const pass = document.getElementById('inputPass').value;
+            const btn = document.getElementById('btnLogin');
+            
+            btn.disabled = true;
+            btn.textContent = 'Ingresando...';
+            
+            try {
+                if (tipoLogin === 'empleado') {
+                    const { data, error } = await supabase
+                        .from('empleados')
+                        .select('*')
+                        .eq('rut', id)
+                        .eq('activo', true)
+                        .single();
+                    
+                    if (error || !data) {
+                        alert('❌ RUT no encontrado');
+                        return;
+                    }
+                    
+                    if (pass !== 'cvs2026') {
+                        alert('❌ Contraseña incorrecta');
+                        return;
+                    }
+                    
+                    currentUser = data;
+                    showEmployeeView();
+                } else {
+                    alert('Vista ' + tipoLogin + ' en desarrollo');
+                }
+            } catch (error) {
+                console.error(error);
+                alert('Error: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Iniciar Sesión';
+            }
+        }
+        
+        function showEmployeeView() {
+            document.getElementById('loginView').classList.add('hidden');
+            document.getElementById('employeeView').classList.remove('hidden');
+            
+            const info = document.getElementById('empInfo');
+            info.innerHTML = `
+                <p style="font-size: 0.75rem; color: #6B7280;">Empleado</p>
+                <p style="font-weight: 600; color: #1F2937;">${currentUser.nombre_completo}</p>
+                <p style="font-size: 0.875rem; color: #6B7280;">${currentUser.rut}</p>
+                <p style="font-size: 0.75rem; color: #9CA3AF;">${currentUser.cargo}</p>
+            `;
+        }
+        
+        async function marcar(tipo) {
+            const select = document.getElementById('selectObra');
+            const obraId = select.value;
+            
+            if (!obraId) {
+                alert('⚠️ Debe seleccionar una obra/faena');
+                return;
+            }
+            
+            const obraNombre = select.options[select.selectedIndex].dataset.nombre;
+            
+            if (!navigator.geolocation) {
+                alert('❌ GPS no disponible');
+                return;
+            }
+            
+            navigator.geolocation.getCurrentPosition(
+                async (pos) => {
+                    try {
+                        const { error } = await supabase.from('marcaciones').insert([{
+                            id_empleado: currentUser.id,
+                            nombre_empleado: currentUser.nombre_completo,
+                            email_empleado: currentUser.email_personal,
+                            rut_empleado: currentUser.rut,
+                            tipo_evento: tipo,
+                            id_obra_faena: obraId,
+                            nombre_obra_faena: obraNombre,
+                            latitud: pos.coords.latitude,
+                            longitud: pos.coords.longitude,
+                            precision_gps: pos.coords.accuracy,
+                            id_dispositivo: 'DEV-' + Date.now(),
+                            sincronizado: true,
+                            hash_verificacion: 'HASH-' + Date.now()
+                        }]);
+                        
+                        if (error) throw error;
+                        
+                        alert('✅ Marcación registrada: ' + tipo + '\n📍 ' + obraNombre);
+                        setTimeout(logout, 2000);
+                    } catch (error) {
+                        console.error(error);
+                        alert('❌ Error: ' + error.message);
+                    }
+                },
+                (error) => {
+                    alert('❌ Error GPS: ' + error.message);
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        }
+        
+        function logout() {
+            currentUser = null;
+            document.getElementById('employeeView').classList.add('hidden');
+            document.getElementById('loginView').classList.remove('hidden');
+            document.getElementById('inputId').value = '';
+            document.getElementById('inputPass').value = '';
+            document.getElementById('selectObra').value = '';
+        }
+    </script>
+</body>
+</html>
